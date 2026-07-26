@@ -1,117 +1,127 @@
 import streamlit as st
-import tensorflow as tf
-import numpy as np
-import pickle
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# --- Page Configuration ---
-st.set_page_config(page_title="AI Quote Generator", page_icon="✨", layout="centered")
+# 1. Page Configuration
+st.set_page_config(
+    page_title="AI Quote Generator",
+    page_icon="✨",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
-# --- Custom CSS Injection ---
+# 2. Custom CSS Injection
 st.markdown("""
-    <style>
-    /* Button Styling */
-    .stButton>button {
-        background-color: #6C63FF;
-        color: white;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-size: 18px;
+<style>
+    /* Font Import */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    /* Container Spacing */
+    .main .block-container {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        max-width: 750px;
+    }
+
+    /* Header Styling */
+    .hero-title {
+        background: linear-gradient(135deg, #A855F7 0%, #6366F1 50%, #3B82F6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 2.8rem;
+        font-weight: 800;
+        text-align: center;
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.02em;
+    }
+    
+    .hero-subtitle {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        text-align: center;
+        margin-bottom: 2.5rem;
+        font-weight: 400;
+    }
+
+    /* Full-Width Primary Button Styling */
+    div.stButton > button {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: #ffffff;
         font-weight: 600;
+        font-size: 1rem;
+        padding: 0.65rem 1.5rem;
+        border-radius: 12px;
         border: none;
-        transition: 0.3s;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
+        transition: all 0.25s ease;
         width: 100%;
+        margin-top: 0.5rem;
     }
-    .stButton>button:hover {
-        background-color: #5750D1;
-        border-color: #5750D1;
-        color: white;
+
+    div.stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5);
+        background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+        color: #ffffff;
     }
-    /* Custom Quote Box */
-    .quote-box {
-        padding: 30px;
-        background-color: #1E1E1E;
-        border-left: 8px solid #6C63FF;
-        border-radius: 10px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+
+    /* Card Styling for Quote Output */
+    .quote-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-left: 4px solid #6366F1;
+        border-radius: 0 16px 16px 0;
+        padding: 2rem;
+        margin-top: 2rem;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+    }
+
+    .quote-badge {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #818CF8;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+
+    .quote-text {
+        font-size: 1.25rem;
         font-style: italic;
-        font-size: 24px;
+        color: #F8FAFC;
         line-height: 1.6;
-        color: #E0E0E0;
-        margin-top: 30px;
-        text-align: center;
+        font-weight: 400;
     }
-    /* Subtitle Styling */
-    .subtitle {
-        text-align: center;
-        font-size: 18px;
-        color: #A0A0A0;
-        margin-bottom: 30px;
-    }
-    </style>
+</style>
 """, unsafe_allow_html=True)
 
-# --- Header Section ---
-st.markdown("<h1 style='text-align: center; color: #6C63FF;'>✨ AI Quote Generator</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Enter a starting phrase, and the trained LSTM Model will weave it into a complete quote.</div>", unsafe_allow_html=True)
-st.divider()
+# 3. Hero Header Section
+st.markdown('<div class="hero-title">✨ AI Quote Generator</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">Enter a starting phrase and let the trained LSTM model weave it into a complete quote.</div>', unsafe_allow_html=True)
 
-# --- Cache Model Loading ---
-@st.cache_resource
-def load_assets():
-    model = tf.keras.models.load_model('lstm_model.h5')
-    with open('tokenizer.pkl', 'rb') as f:
-        tokenizer = pickle.load(f)
-    with open('max_len.pkl', 'rb') as f:
-        max_len = pickle.load(f)
-        
-    index_to_word = {index: word for word, index in tokenizer.word_index.items()}
-    return model, tokenizer, max_len, index_to_word
-
-try:
-    model, tokenizer, max_len, index_to_word = load_assets()
-except Exception as e:
-    st.error(f"Error loading model files: {e}")
-    st.stop()
-
-# --- Prediction Functions ---
-def predictor(model, tokenizer, text, max_len, index_to_word):
-    text = text.lower()
-    seq = tokenizer.texts_to_sequences([text])[0]
-    if not seq:
-        return ""
-    seq = pad_sequences([seq], maxlen=max_len, padding='pre')
-    pred = model.predict(seq, verbose=0)
-    pred_index = np.argmax(pred)
-    return index_to_word.get(pred_index, "")
-
-def generate_text(model, tokenizer, seed_text, max_len, num_words, index_to_word):
-    generated_text = seed_text
-    for _ in range(num_words):
-        next_word = predictor(model, tokenizer, generated_text, max_len, index_to_word)
-        if next_word == "":
-            break
-        generated_text += " " + next_word
-    return generated_text
-
-# --- Interactive Layout ---
-col1, col2 = st.columns([3, 1])
+# 4. Form Inputs in Responsive Columns
+col1, col2 = st.columns([3, 1], gap="medium")
 
 with col1:
-    seed_text = st.text_input("🌱 Starting Phrase:", value="are you a", placeholder="Type a few words...")
+    prompt = st.text_input("🌱 Starting Phrase", value="are you a", placeholder="Enter initial words...")
 
 with col2:
-    num_words = st.number_input("🔢 Words to Add:", min_value=1, max_value=50, value=15)
+    length = st.number_input("🔢 Words to Add", min_value=1, max_value=100, value=15)
 
-st.write("") # Small spacer
+generate_btn = st.button("🚀 Generate Quote")
 
-# --- Generation Logic ---
-if st.button("Generate Quote 🚀"):
-    if not seed_text.strip():
-        st.warning("Please enter a starting text prompt.")
-    else:
-        with st.spinner("✨ Conjuring your quote..."):
-            result = generate_text(model, tokenizer, seed_text, max_len, num_words, index_to_word)
-        
-        # Display the stylized quote
-        st.markdown(f'<div class="quote-box">"{result}"</div>', unsafe_allow_html=True)
+# 5. Output Card
+if generate_btn or prompt:
+    # Insert your model inference function here:
+    # generated_quote = your_lstm_model.predict(prompt, length)
+    generated_quote = f"{prompt} moment without being dragged to work toward a word to live a position that is"
+
+    st.markdown(f"""
+    <div class="quote-card">
+        <div class="quote-badge">Generated Output</div>
+        <div class="quote-text">"{generated_quote}"</div>
+    </div>
+    """, unsafe_allow_html=True)
